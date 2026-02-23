@@ -18,8 +18,8 @@ import type {
   PendingArticle,
   CreatePendingArticleDto,
   UpdatePendingArticleDto,
-  ReceivePendingArticleFormData,
 } from '@/lib/api/types'
+import type { ReceivePendingArticleFormData } from '@/lib/validations/pending-articles'
 
 export default function PendingArticlesPage() {
   const {
