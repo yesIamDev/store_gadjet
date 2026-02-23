@@ -44,7 +44,7 @@ export const receivePendingArticleSchema = z.object({
     .positive('La quantité reçue doit être positive')
     .min(1, 'La quantité reçue doit être supérieure à 0'),
   emplacement: z.enum(['MAGASIN', 'DEPOT'], {
-    errorMap: () => ({ message: "L'emplacement doit être MAGASIN ou DEPOT" }),
+    message: "L'emplacement doit être MAGASIN ou DEPOT",
   }),
   motif: z.string().max(500, 'Le motif ne peut pas dépasser 500 caractères').optional().or(z.literal('')),
 })

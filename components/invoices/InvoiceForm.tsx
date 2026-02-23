@@ -192,7 +192,7 @@ export function InvoiceForm({
 
       // Construire l'objet de données de manière simple et claire
       const payload: any = {
-        numeroFacture: data.numeroFacture.trim(),
+        numeroFacture: data.numeroFacture?.trim() || (isEdit ? undefined : ''),
         numeroBonLivraison: data.numeroBonLivraison?.trim() || undefined,
         montantTotal: calculatedTotal > 0 ? calculatedTotal : (Number(data.montantTotal) || 0),
         status: data.status || 'NON_PAYE',

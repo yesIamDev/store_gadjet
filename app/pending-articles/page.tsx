@@ -19,7 +19,9 @@ import type {
   CreatePendingArticleDto,
   UpdatePendingArticleDto,
   ReceivePendingArticleDto,
+  LocationType,
 } from '@/lib/api/types'
+import type { ReceivePendingArticleFormData } from '@/lib/validations/pending-articles'
 
 export default function PendingArticlesPage() {
   const {
@@ -153,10 +155,16 @@ export default function PendingArticlesPage() {
     setIsReceiveDialogOpen(true)
   }
 
-  const handleReceive = async (data: ReceivePendingArticleDto) => {
+  const handleReceive = async (data: ReceivePendingArticleFormData) => {
     if (pendingArticleToReceive) {
       try {
-        await receivePendingArticle(pendingArticleToReceive.id, data)
+        // Convertir le type du formulaire vers le DTO
+        const dto: ReceivePendingArticleDto = {
+          quantiteRecue: data.quantiteRecue,
+          emplacement: data.emplacement as LocationType,
+          motif: data.motif || undefined,
+        }
+        await receivePendingArticle(pendingArticleToReceive.id, dto)
         setIsReceiveDialogOpen(false)
         setPendingArticleToReceive(null)
         fetchPendingArticles()
