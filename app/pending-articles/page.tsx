@@ -18,8 +18,8 @@ import type {
   PendingArticle,
   CreatePendingArticleDto,
   UpdatePendingArticleDto,
+  ReceivePendingArticleDto,
 } from '@/lib/api/types'
-import type { ReceivePendingArticleFormData } from '@/lib/validations/pending-articles'
 
 export default function PendingArticlesPage() {
   const {
@@ -153,7 +153,7 @@ export default function PendingArticlesPage() {
     setIsReceiveDialogOpen(true)
   }
 
-  const handleReceive = async (data: ReceivePendingArticleFormData) => {
+  const handleReceive = async (data: ReceivePendingArticleDto) => {
     if (pendingArticleToReceive) {
       try {
         await receivePendingArticle(pendingArticleToReceive.id, data)
