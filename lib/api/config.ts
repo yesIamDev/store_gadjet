@@ -1,5 +1,8 @@
-export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'
+// Normaliser l'URL de l'API (enlever le slash final si présent)
+const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'
+export const API_BASE_URL = rawApiUrl.endsWith('/')
+  ? rawApiUrl.slice(0, -1)
+  : rawApiUrl
 
 export const API_ENDPOINTS = {
   AUTH: {
