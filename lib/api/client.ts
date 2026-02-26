@@ -51,7 +51,19 @@ class ApiClient {
             statusCode: response.status,
           }
         }
-        throw new Error(error.message || 'Une erreur est survenue')
+
+        // Extraire le message d'erreur (NestJS peut renvoyer un tableau ou une string)
+        let errorMessage = 'Une erreur est survenue'
+        if (error.message) {
+          if (Array.isArray(error.message)) {
+            // Si c'est un tableau (erreurs de validation NestJS)
+            errorMessage = error.message.join('. ')
+          } else if (typeof error.message === 'string') {
+            errorMessage = error.message
+          }
+        }
+
+        throw new Error(errorMessage)
       }
 
       if (response.status === 204) {

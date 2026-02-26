@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
-import { FaPlus } from 'react-icons/fa'
-import { startOfDay, startOfWeek, startOfMonth, endOfDay, endOfWeek, endOfMonth, isWithinInterval } from 'date-fns'
+import { useEffect, useState, useMemo, useRef } from 'react'
+import { FaPlus, FaFileExcel, FaInfoCircle } from 'react-icons/fa'
+import { startOfDay, endOfDay, isSameDay } from 'date-fns'
 import { ProtectedLayout } from '@/components/layout/ProtectedLayout'
 import { usePendingArticlesStore } from '@/store/pendingArticlesStore'
 import { useArticlesStore } from '@/store/articlesStore'
@@ -12,7 +12,15 @@ import { PendingArticleTableSkeleton } from '@/components/pending-articles/Pendi
 import { PendingArticleFilter, type DateFilterType } from '@/components/pending-articles/PendingArticleFilter'
 import { DeleteConfirmDialog } from '@/components/pending-articles/DeleteConfirmDialog'
 import { ReceivePendingArticleDialog } from '@/components/pending-articles/ReceivePendingArticleDialog'
+import { ArticleSearch } from '@/components/articles/ArticleSearch'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import type {
   PendingArticle,
@@ -20,8 +28,10 @@ import type {
   UpdatePendingArticleDto,
   ReceivePendingArticleDto,
   LocationType,
+  PendingArticleStatus,
 } from '@/lib/api/types'
 import type { ReceivePendingArticleFormData } from '@/lib/validations/pending-articles'
+import { pendingArticlesApi } from '@/lib/api/pending-articles'
 
 export default function PendingArticlesPage() {
   const {
@@ -45,48 +55,80 @@ export default function PendingArticlesPage() {
   const [pendingArticleToDelete, setPendingArticleToDelete] = useState<PendingArticle | null>(null)
   const [pendingArticleToReceive, setPendingArticleToReceive] = useState<PendingArticle | null>(null)
   const [dateFilter, setDateFilter] = useState<DateFilterType>(null)
+  const [statusFilter, setStatusFilter] = useState<PendingArticleStatus | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [isImporting, setIsImporting] = useState(false)
+  const [isFormatDialogOpen, setIsFormatDialogOpen] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const filteredPendingArticles = useMemo(() => {
     let filtered = pendingArticles
 
+    // Filtre par nom d'article
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim()
+      filtered = filtered.filter((pa) =>
+        pa.article.nom.toLowerCase().includes(query)
+      )
+    }
+
+    // Filtre par statut
+    if (statusFilter) {
+      filtered = filtered.filter((pa) => pa.status === statusFilter)
+    }
+
     // Filtre par date de réception (quand le statut est RECU)
     if (dateFilter) {
-      const now = new Date()
-      let startDate: Date
-      let endDate: Date
-
-      switch (dateFilter) {
-        case 'TODAY':
-          startDate = startOfDay(now)
-          endDate = endOfDay(now)
-          break
-        case 'THIS_WEEK':
-          startDate = startOfWeek(now, { weekStartsOn: 1 })
-          endDate = endOfWeek(now, { weekStartsOn: 1 })
-          break
-        case 'THIS_MONTH':
-          startDate = startOfMonth(now)
-          endDate = endOfMonth(now)
-          break
-        default:
-          return filtered
-      }
-
       filtered = filtered.filter((pa) => {
         // Filtrer par date de réception si disponible, sinon ignorer
         if (!pa.dateReception) return false
         const dateReception = new Date(pa.dateReception)
-        return isWithinInterval(dateReception, { start: startDate, end: endDate })
+        // Comparer uniquement le jour (sans l'heure)
+        return isSameDay(dateReception, dateFilter)
       })
     }
 
     return filtered
-  }, [pendingArticles, dateFilter])
+  }, [pendingArticles, searchQuery, statusFilter, dateFilter])
 
   useEffect(() => {
     fetchPendingArticles()
     fetchArticles()
   }, [fetchPendingArticles, fetchArticles])
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handleImportChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] as File | undefined
+    if (!file) return
+
+    const lowerName = file.name.toLowerCase()
+    if (!lowerName.endsWith('.xlsx') && !lowerName.endsWith('.xls')) {
+      toast.error('Veuillez sélectionner un fichier Excel (.xlsx ou .xls)')
+      event.target.value = ''
+      return
+    }
+
+    setIsImporting(true)
+    try {
+      const result = await pendingArticlesApi.importFromExcel(file)
+      await fetchPendingArticles()
+      toast.success(
+        `Import terminé : ${result.created} ligne(s) créée(s), ${result.updated} mise(s) à jour`
+      )
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Erreur lors de l'import de la file d'attente"
+      )
+    } finally {
+      setIsImporting(false)
+      event.target.value = ''
+    }
+  }
 
   const handleCreate = async (
     data: CreatePendingArticleDto | UpdatePendingArticleDto,
@@ -195,10 +237,41 @@ export default function PendingArticlesPage() {
               Gérez les articles que vous devez recevoir
             </p>
           </div>
-          <Button onClick={() => setIsFormOpen(true)} size="sm">
-            <FaPlus className="mr-2 h-3.5 w-3.5" />
-            Ajouter un article en attente
-          </Button>
+          <div className="flex items-center gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,.xls"
+              className="hidden"
+              onChange={handleImportChange}
+              disabled={isImporting}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={isImporting}
+              onClick={handleImportClick}
+            >
+              <FaFileExcel className="mr-2 h-3.5 w-3.5 text-emerald-600" />
+              {isImporting ? 'Import en cours...' : 'Importer Excel'}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsFormatDialogOpen(true)}
+              className="h-8 w-8 p-0"
+              title="Voir le format Excel attendu"
+            >
+              <FaInfoCircle className="h-4 w-4 text-muted-foreground" />
+            </Button>
+
+            <Button onClick={() => setIsFormOpen(true)} size="sm">
+              <FaPlus className="mr-2 h-3.5 w-3.5" />
+              Ajouter un article en attente
+            </Button>
+          </div>
         </div>
 
         {error && (
@@ -216,10 +289,21 @@ export default function PendingArticlesPage() {
         )}
 
         {pendingArticles.length > 0 && (
-          <PendingArticleFilter
-            dateFilter={dateFilter}
-            onDateFilterChange={setDateFilter}
-          />
+          <div className="space-y-4">
+            <div className="max-w-md">
+              <ArticleSearch
+                value={searchQuery}
+                onChange={setSearchQuery}
+                placeholder="Rechercher par nom d'article..."
+              />
+            </div>
+            <PendingArticleFilter
+              dateFilter={dateFilter}
+              onDateFilterChange={setDateFilter}
+              statusFilter={statusFilter}
+              onStatusFilterChange={setStatusFilter}
+            />
+          </div>
         )}
 
         {isLoading && pendingArticles.length === 0 ? (
@@ -229,17 +313,26 @@ export default function PendingArticlesPage() {
             <p className="text-sm text-muted-foreground">
               {pendingArticles.length === 0
                 ? "Aucun article en attente pour le moment. Ajoutez votre premier article en attente !"
-                : "Aucun article en attente ne correspond aux filtres sélectionnés."}
+                : searchQuery || statusFilter || dateFilter
+                ? "Aucun article en attente ne correspond aux filtres sélectionnés."
+                : "Aucun article en attente pour le moment."}
             </p>
           </div>
         ) : (
-          <PendingArticleTable
-            pendingArticles={filteredPendingArticles}
-            onEdit={handleEdit}
-            onDelete={handleDeleteClick}
-            onReceive={handleReceiveClick}
-            isLoading={isLoading}
-          />
+          <>
+            {(searchQuery || statusFilter || dateFilter) && (
+              <p className="text-xs text-muted-foreground mb-2">
+                {filteredPendingArticles.length} article{filteredPendingArticles.length > 1 ? 's' : ''} en attente trouvé{filteredPendingArticles.length > 1 ? 's' : ''}
+              </p>
+            )}
+            <PendingArticleTable
+              pendingArticles={filteredPendingArticles}
+              onEdit={handleEdit}
+              onDelete={handleDeleteClick}
+              onReceive={handleReceiveClick}
+              isLoading={isLoading}
+            />
+          </>
         )}
 
         <PendingArticleForm
@@ -271,6 +364,56 @@ export default function PendingArticlesPage() {
           onSubmit={handleReceive}
           isLoading={isLoading}
         />
+
+        <Dialog open={isFormatDialogOpen} onOpenChange={setIsFormatDialogOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Format Excel pour l'import de la file d'attente</DialogTitle>
+              <DialogDescription>
+                Le fichier Excel doit contenir les colonnes suivantes (la première ligne doit être l'en-tête)
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="rounded-lg border border-border bg-muted/50 p-4">
+                <h4 className="font-semibold mb-3 text-sm">Colonnes requises :</h4>
+                <ul className="space-y-2 text-sm">
+                  <li className="flex items-start gap-2">
+                    <span className="font-mono font-semibold text-primary min-w-[160px]">article</span>
+                    <span className="text-muted-foreground">Nom de l'article (doit exister dans la base de données)</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="font-mono font-semibold text-primary min-w-[160px]">quantiteAttendue</span>
+                    <span className="text-muted-foreground">Quantité attendue (requis, peut aussi être "quantite")</span>
+                  </li>
+                </ul>
+              </div>
+              <div className="rounded-lg border border-border bg-muted/50 p-4">
+                <h4 className="font-semibold mb-3 text-sm">Colonnes optionnelles :</h4>
+                <ul className="space-y-2 text-sm">
+                  <li className="flex items-start gap-2">
+                    <span className="font-mono font-semibold text-primary min-w-[160px]">dateAttendue</span>
+                    <span className="text-muted-foreground">Date attendue de réception (peut aussi être "date")</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="font-mono font-semibold text-primary min-w-[160px]">note</span>
+                    <span className="text-muted-foreground">Note ou commentaire</span>
+                  </li>
+                </ul>
+              </div>
+              <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 p-4">
+                <p className="text-sm font-medium text-amber-900 dark:text-amber-200 mb-2">
+                  ⚠️ Comportement de l'import :
+                </p>
+                <ul className="text-sm text-amber-800 dark:text-amber-300 space-y-1 list-disc list-inside">
+                  <li>Si une file d'attente EN_ATTENTE existe déjà pour cet article, la quantité sera augmentée</li>
+                  <li>Sinon, une nouvelle entrée en attente sera créée</li>
+                  <li>Les articles qui n'existent pas dans la base seront ignorés</li>
+                  <li>Les colonnes sont insensibles à la casse</li>
+                </ul>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </ProtectedLayout>
   )

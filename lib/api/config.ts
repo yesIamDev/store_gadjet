@@ -12,6 +12,7 @@ export const API_ENDPOINTS = {
   ARTICLES: {
     BASE: '/articles',
     BY_ID: (id: string) => `/articles/${id}`,
+    IMPORT: '/articles/import',
   },
   STOCK_MOVEMENTS: {
     BASE: '/stock-movements',
@@ -30,5 +31,6 @@ export const API_ENDPOINTS = {
     BASE: '/pending-articles',
     BY_ID: (id: string) => `/pending-articles/${id}`,
     RECEIVE: (id: string) => `/pending-articles/${id}/receive`,
+    IMPORT: '/pending-articles/import',
   },
 } as const
