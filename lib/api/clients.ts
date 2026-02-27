@@ -2,9 +2,25 @@ import { apiClient } from './client'
 import { API_ENDPOINTS } from './config'
 import type { Client, CreateClientDto, UpdateClientDto } from './types'
 
+interface PaginatedResponse<T> {
+  data: T[]
+  total: number
+  page: number
+  limit: number
+  totalPages: number
+}
+
 export const clientsApi = {
   async getAll(): Promise<Client[]> {
-    return await apiClient.get<Client[]>(API_ENDPOINTS.CLIENTS.BASE)
+    const response = await apiClient.get<PaginatedResponse<Client>>(
+      API_ENDPOINTS.CLIENTS.BASE
+    )
+    // Si la réponse est paginée, extraire le tableau data
+    if (response && typeof response === 'object' && 'data' in response) {
+      return response.data
+    }
+    // Sinon, retourner la réponse telle quelle (pour compatibilité)
+    return Array.isArray(response) ? response : []
   },
 
   async getById(id: string): Promise<Client> {
